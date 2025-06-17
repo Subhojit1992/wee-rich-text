@@ -24,7 +24,7 @@ function App() {
       <h1>Wee Rich Text Editor Demo</h1>
       
       <div style={{ marginBottom: '40px' }}>
-        <h2>Basic Usage</h2>
+        <h2>Basic Usage (All Tools)</h2>
         <WeeRichText
           onChange={(html) => setContent1(html)}
           placeholder="Start typing here..."
@@ -33,6 +33,44 @@ function App() {
         <div style={{ marginTop: '10px', padding: '10px', backgroundColor: '#f5f5f5', borderRadius: '4px' }}>
           <strong>Content:</strong> {content1}
         </div>
+      </div>
+
+      <div style={{ marginBottom: '40px' }}>
+        <h2>Active State Demo</h2>
+        <p style={{ color: '#666', fontSize: '14px', marginBottom: '10px' }}>
+          ✨ Click on formatted text below and watch the toolbar buttons show their active state!
+        </p>
+        <WeeRichText
+          initialContent="<p>Click on this <strong>bold text</strong>, this <em>italic text</em>, this <u>underlined text</u>, or this <s>strikethrough text</s> to see the toolbar buttons become active!</p>"
+          height="120px"
+        />
+      </div>
+
+      <div style={{ marginBottom: '40px' }}>
+        <h2>Custom Toolbar - Bold & Italic Only</h2>
+        <WeeRichText
+          tools={['bold', 'italic']}
+          placeholder="Only bold and italic available..."
+          height="150px"
+        />
+      </div>
+
+      <div style={{ marginBottom: '40px' }}>
+        <h2>Custom Toolbar - Underline & Strikethrough Only</h2>
+        <WeeRichText
+          tools={['underline', 'strikeThrough']}
+          placeholder="Only underline and strikethrough available..."
+          height="150px"
+        />
+      </div>
+
+      <div style={{ marginBottom: '40px' }}>
+        <h2>Single Tool - Bold Only</h2>
+        <WeeRichText
+          tools={['bold']}
+          placeholder="Only bold formatting available..."
+          height="150px"
+        />
       </div>
 
       <div style={{ marginBottom: '40px' }}>
@@ -79,6 +117,15 @@ function App() {
         <WeeRichText
           toolbar={false}
           placeholder="This editor has no toolbar..."
+          height="100px"
+        />
+      </div>
+
+      <div style={{ marginBottom: '40px' }}>
+        <h2>Empty Tools Array (No Toolbar)</h2>
+        <WeeRichText
+          tools={[]}
+          placeholder="Empty tools array - no toolbar will show..."
           height="100px"
         />
       </div>

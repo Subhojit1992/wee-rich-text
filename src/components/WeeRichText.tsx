@@ -1,5 +1,79 @@
-// src/components/WysiwygEditor/index.tsx
+// src/components/WeeRichText/index.tsx
 import React, { useState, useRef, useCallback, useEffect } from "react";
+import styled from '@emotion/styled';
+import ToolbarButton from './ToolbarButton';
+
+// Styled components
+const Container = styled.div`
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+`;
+
+const ToolbarContainer = styled.div`
+  margin-bottom: 8px;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 8px;
+`;
+
+const EditorContainer = styled.div<{ disabled?: boolean; height?: string | number }>`
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  min-height: ${props => typeof props.height === 'number' ? `${props.height}px` : props.height || '200px'};
+  padding: 12px;
+  outline: none;
+  font-size: 14px;
+  line-height: 1.5;
+  background-color: ${props => props.disabled ? '#f9f9f9' : '#fff'};
+  color: ${props => props.disabled ? '#666' : '#000'};
+  cursor: ${props => props.disabled ? 'not-allowed' : 'text'};
+  
+  &:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+  }
+
+  &[data-placeholder]:empty::before {
+    content: attr(data-placeholder);
+    color: #999;
+    font-style: italic;
+  }
+`;
+
+// Tool definitions
+export type ToolName = 'bold' | 'italic' | 'underline' | 'strikeThrough';
+
+export interface ToolDefinition {
+  name: ToolName;
+  command: string;
+  title: string;
+  icon: React.ReactNode;
+}
+
+const DEFAULT_TOOLS: ToolDefinition[] = [
+  {
+    name: 'bold',
+    command: 'bold',
+    title: 'Bold (Ctrl+B)',
+    icon: <strong>B</strong>
+  },
+  {
+    name: 'italic',
+    command: 'italic',
+    title: 'Italic (Ctrl+I)',
+    icon: <em>I</em>
+  },
+  {
+    name: 'underline',
+    command: 'underline',
+    title: 'Underline (Ctrl+U)',
+    icon: <u>U</u>
+  },
+  {
+    name: 'strikeThrough',
+    command: 'strikeThrough',
+    title: 'Strikethrough',
+    icon: <s>S</s>
+  }
+];
 
 export interface WeeRichTextProps {
   initialContent?: string;
@@ -9,6 +83,7 @@ export interface WeeRichTextProps {
   className?: string;
   style?: React.CSSProperties;
   toolbar?: boolean;
+  tools?: ToolName[];
   height?: string | number;
 }
 
@@ -29,12 +104,14 @@ const WeeRichText = React.forwardRef<WeeRichTextRef, WeeRichTextProps>(
       className = "",
       style = {},
       toolbar = true,
+      tools = ['bold', 'italic', 'underline', 'strikeThrough'],
       height = "200px",
     },
     ref
   ) => {
     const editorRef = useRef<HTMLDivElement | null>(null);
     const [content, setContent] = useState<string>(initialContent);
+    const [activeFormats, setActiveFormats] = useState<Set<string>>(new Set());
 
     // Expose methods via ref
     React.useImperativeHandle(ref, () => ({
@@ -52,6 +129,71 @@ const WeeRichText = React.forwardRef<WeeRichTextRef, WeeRichTextProps>(
         editorRef.current?.blur();
       },
     }));
+
+    // Check formatting state at current cursor position
+    const updateFormattingState = useCallback(() => {
+      if (disabled || !editorRef.current) return;
+
+      const newActiveFormats = new Set<string>();
+
+      try {
+        // Check each command state
+        const commands = ['bold', 'italic', 'underline', 'strikeThrough'];
+        commands.forEach((command) => {
+          if (document.queryCommandState && document.queryCommandState(command)) {
+            newActiveFormats.add(command);
+          }
+        });
+
+        setActiveFormats(newActiveFormats);
+      } catch {
+        // Fallback: check DOM elements around selection
+        const selection = window.getSelection();
+        if (selection && selection.rangeCount > 0) {
+          const range = selection.getRangeAt(0);
+          let node: Node | null = range.startContainer;
+
+          // Walk up the DOM tree to check for formatting elements
+          while (node && node !== editorRef.current) {
+            if (node.nodeType === Node.ELEMENT_NODE) {
+              const element = node as Element;
+              const tagName = element.tagName?.toLowerCase();
+              
+              if (['strong', 'b'].includes(tagName)) {
+                newActiveFormats.add('bold');
+              }
+              if (['em', 'i'].includes(tagName)) {
+                newActiveFormats.add('italic');
+              }
+              if (tagName === 'u') {
+                newActiveFormats.add('underline');
+              }
+              if (['s', 'strike', 'del'].includes(tagName)) {
+                newActiveFormats.add('strikeThrough');
+              }
+              
+              // Check CSS styles
+              const computedStyle = window.getComputedStyle(element);
+              if (computedStyle.fontWeight === 'bold' || parseInt(computedStyle.fontWeight) >= 600) {
+                newActiveFormats.add('bold');
+              }
+              if (computedStyle.fontStyle === 'italic') {
+                newActiveFormats.add('italic');
+              }
+              if (computedStyle.textDecoration.includes('underline')) {
+                newActiveFormats.add('underline');
+              }
+              if (computedStyle.textDecoration.includes('line-through')) {
+                newActiveFormats.add('strikeThrough');
+              }
+            }
+            node = node.parentNode;
+          }
+        }
+
+        setActiveFormats(newActiveFormats);
+      }
+    }, [disabled]);
 
     // Function to handle text formatting using modern Selection API
     const applyFormat = useCallback((command: string) => {
@@ -74,10 +216,12 @@ const WeeRichText = React.forwardRef<WeeRichTextRef, WeeRichTextProps>(
         
         // Update content after formatting
         setContent(editorRef.current.innerHTML);
+        // Update formatting state
+        setTimeout(updateFormattingState, 0);
       } catch (error) {
         console.warn('Format command failed:', command, error);
       }
-    }, [disabled]);
+    }, [disabled, updateFormattingState]);
 
     // Modern approach for text formatting
     const applyFormatToRange = (range: Range, command: string) => {
@@ -113,8 +257,15 @@ const WeeRichText = React.forwardRef<WeeRichTextRef, WeeRichTextProps>(
         const newContent = editorRef.current.innerHTML;
         setContent(newContent);
         onChange?.(newContent);
+        // Update formatting state after content change
+        setTimeout(updateFormattingState, 0);
       }
-    }, [onChange]);
+    }, [onChange, updateFormattingState]);
+
+    // Handle selection changes (cursor movement, clicks)
+    const handleSelectionChange = useCallback(() => {
+      updateFormattingState();
+    }, [updateFormattingState]);
 
     // Handle paste events to clean up content
     const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -133,79 +284,49 @@ const WeeRichText = React.forwardRef<WeeRichTextRef, WeeRichTextProps>(
       }
     }, [initialContent]);
 
-    // Toolbar component
-    const ToolbarButton = ({ 
-      command, 
-      title, 
-      children 
-    }: { 
-      command: string; 
-      title: string; 
-      children: React.ReactNode; 
-    }) => (
-      <button
-        type="button"
-        onClick={() => applyFormat(command)}
-        disabled={disabled}
-        title={title}
-        style={{
-          padding: '6px 12px',
-          margin: '2px',
-          border: '1px solid #ccc',
-          borderRadius: '4px',
-          backgroundColor: disabled ? '#f5f5f5' : '#fff',
-          cursor: disabled ? 'not-allowed' : 'pointer',
-          fontSize: '14px',
-        }}
-        onMouseDown={(e) => e.preventDefault()} // Prevent losing focus
-      >
-        {children}
-      </button>
-    );
+    // Add selection change listener
+    useEffect(() => {
+      document.addEventListener('selectionchange', handleSelectionChange);
+      return () => {
+        document.removeEventListener('selectionchange', handleSelectionChange);
+      };
+    }, [handleSelectionChange]);
 
-    const editorStyle: React.CSSProperties = {
-      border: '1px solid #ccc',
-      borderRadius: '4px',
-      minHeight: height,
-      padding: '12px',
-      outline: 'none',
-      fontSize: '14px',
-      lineHeight: '1.5',
-      backgroundColor: disabled ? '#f9f9f9' : '#fff',
-      color: disabled ? '#666' : '#000',
-      cursor: disabled ? 'not-allowed' : 'text',
-      ...style,
-    };
+    // Get filtered tools based on props
+    const visibleTools = DEFAULT_TOOLS.filter(tool => tools.includes(tool.name));
 
     return (
-      <div className={`wee-rich-text ${className}`}>
-        {toolbar && (
-          <div style={{ marginBottom: '8px', borderBottom: '1px solid #eee', paddingBottom: '8px' }}>
-            <ToolbarButton command="bold" title="Bold (Ctrl+B)">
-              <strong>B</strong>
-            </ToolbarButton>
-            <ToolbarButton command="italic" title="Italic (Ctrl+I)">
-              <em>I</em>
-            </ToolbarButton>
-            <ToolbarButton command="underline" title="Underline (Ctrl+U)">
-              <u>U</u>
-            </ToolbarButton>
-            <ToolbarButton command="strikeThrough" title="Strikethrough">
-              <s>S</s>
-            </ToolbarButton>
-          </div>
+      <Container className={`wee-rich-text ${className}`} style={style}>
+        {toolbar && visibleTools.length > 0 && (
+          <ToolbarContainer>
+            {visibleTools.map((tool) => (
+              <ToolbarButton
+                key={tool.name}
+                command={tool.command}
+                title={tool.title}
+                disabled={disabled}
+                active={activeFormats.has(tool.command)}
+                onClick={applyFormat}
+              >
+                {tool.icon}
+              </ToolbarButton>
+            ))}
+          </ToolbarContainer>
         )}
 
-        <div
+        <EditorContainer
           ref={editorRef}
           contentEditable={!disabled}
-          style={editorStyle}
+          disabled={disabled}
+          height={height}
           onInput={handleContentChange}
           onPaste={handlePaste}
+          onMouseUp={updateFormattingState}
+          onKeyUp={updateFormattingState}
           data-placeholder={placeholder}
           suppressContentEditableWarning={true}
         />
-      </div>
+      </Container>
     );
   }
 );
